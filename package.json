@@ -1,10 +1,10 @@
 {
 	"name": "hcb-point-of-sale",
 	"private": true,
-	"version": "0.0.1",
+	"version": "1.0.0",
 	"type": "module",
 	"scripts": {
-		"dev": "concurrently \"docker compose up\" \"vite dev\" \"bun --bun run backend:dev\"",
+		"dev": "concurrently \"docker compose up db adminer\" \"vite dev\" \"bun --bun run backend:dev\"",
 		"backend:dev": "bun --watch run src/backend/server.ts",
 		"build": "vite build",
 		"preview": "vite preview",
@@ -50,6 +50,7 @@
 		"drizzle-orm": "^0.40.0",
 		"innerhcb": "^1.2.1",
 		"postgres": "^3.4.5",
+		"resend": "^6.0.2",
 		"zod": "^4.1.5"
 	}
 }

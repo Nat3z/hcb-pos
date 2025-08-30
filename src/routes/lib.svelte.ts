@@ -17,7 +17,7 @@ export const waitingForInput = $state({
 export const commandHistory = $state<string[]>([]);
 export const historyPosition = $state({ index: -1 });
 
-export async function processCommand(command: string) {
+export async function processCommand(command: string, dontShowCommand: boolean = false) {
 	// Add the command to history (if not empty and not duplicate of last command)
 	if (
 		command.trim() &&
@@ -29,7 +29,9 @@ export async function processCommand(command: string) {
 	historyPosition.index = -1;
 
 	// Add the command to output with prompt
-	cmdOut.push(`$ ${command}`);
+	if (!dontShowCommand) {
+		cmdOut.push(`$ ${command}`);
+	}
 
 	const prompt = (question: string): Promise<string> => {
 		return new Promise((resolve) => {
@@ -80,4 +82,8 @@ export function navigateHistory(direction: 'up' | 'down'): string {
 	}
 
 	return historyPosition.index >= 0 ? commandHistory[historyPosition.index] : '';
+}
+
+export function addOutput(line: string) {
+	cmdOut.push(line);
 }

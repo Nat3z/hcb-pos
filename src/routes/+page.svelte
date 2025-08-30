@@ -1,12 +1,14 @@
 <script lang="ts">
 	import { signIn, useSession } from '$lib/auth-client';
 	import { onMount } from 'svelte';
+	import { page } from '$app/stores';
 	import {
 		cmdOut,
 		processCommand,
 		waitingForInput,
 		submitInput,
-		navigateHistory
+		navigateHistory,
+		addOutput
 	} from './lib.svelte';
 
 	let commandInput = $state('');
@@ -46,11 +48,31 @@
 
 	onMount(() => {
 		inputRef?.focus();
+
+		// Check for reset token in URL and automatically trigger reset-password command
+		const urlParams = new URLSearchParams(window.location.search);
+		const token = urlParams.get('token');
+
+		if (token) {
+			// Clear the token from URL for security
+			const url = new URL(window.location.href);
+			url.searchParams.delete('token');
+			window.history.replaceState({}, '', url.toString());
+
+			// Add notification and automatically trigger reset-password command
+			addOutput('Password reset token detected! Starting password reset process...');
+			addOutput('');
+
+			// Automatically execute the reset-password command with the token
+			setTimeout(async () => {
+				await processCommand(`reset-password ${token}`, true);
+			}, 500);
+		}
 	});
 </script>
 
 <svelte:head>
-	<title>HCB PoS - {$session.data?.user?.name}</title>
+	<title>HCB PoS{$session.data?.user?.name ? ` - ${$session.data?.user?.name}` : ''}</title>
 </svelte:head>
 <main class="flex h-screen flex-col overflow-y-auto p-4">
 	{#each cmdOut as line}

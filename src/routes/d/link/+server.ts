@@ -1,4 +1,4 @@
-import { auth } from '$lib/auth';
+import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import { hcbOrganization } from '$lib/server/db/schema';
 import { eq } from 'drizzle-orm';

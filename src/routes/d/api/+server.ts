@@ -1,4 +1,4 @@
-import { auth } from '$lib/auth';
+import { auth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import type { RequestHandler } from './$types';
 import { apiKey as apiKeyTable } from '$lib/server/db/schema';

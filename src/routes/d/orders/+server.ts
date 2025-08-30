@@ -1,4 +1,4 @@
-import { auth } from '$lib/auth';
+import { auth } from '$lib/server/auth';
 import { createOrder } from '$lib/server/order';
 import type { RequestHandler } from './$types';
 

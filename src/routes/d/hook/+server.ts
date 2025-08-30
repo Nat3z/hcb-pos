@@ -1,4 +1,4 @@
-import { auth } from '$lib/auth';
+import { auth } from '$lib/server/auth';
 import z from 'zod';
 import type { RequestHandler } from './$types';
 import { orderHook, product } from '$lib/server/db/schema';

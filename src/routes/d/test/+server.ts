@@ -3,7 +3,7 @@ import type { RequestHandler } from './$types';
 import { orderHook, order as orderTable } from '$lib/server/db/schema';
 import { eq, and } from 'drizzle-orm';
 import { db } from '$lib/server/db';
-import { auth } from '$lib/auth';
+import { auth } from '$lib/server/auth';
 
 const schema = z.object({
 	orderId: z.string()

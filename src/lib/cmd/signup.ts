@@ -27,7 +27,9 @@ export class SignupCommand extends Command {
 			return;
 		}
 
-		add(`Signup successful. You are now signed up as ${result.data.user.email}.`);
+		add(
+			`Signup successful. You are now signed up as ${result.data.user.email}. Check your email for a verification email.`
+		);
 		add(
 			`Run 'link' to link your account to an HCB organization. Without this, you cannot sell products.`
 		);

@@ -287,6 +287,8 @@ const CHECK_INTERVAL_MS = parseInt(process.env.ORDER_CHECK_INTERVAL || '25000');
 
 // Initialize and start the order fulfillment checker
 const checker = new OrderFulfillmentChecker(CHECK_INTERVAL_MS);
+
+await new Promise((resolve) => setTimeout(resolve, 10000));
 checker.start();
 
 // Graceful shutdown

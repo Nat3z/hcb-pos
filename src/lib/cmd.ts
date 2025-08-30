@@ -15,6 +15,9 @@ import { APiCommand } from './cmd/api';
 import { HookCommand } from './cmd/hook';
 import { TestCommand } from './cmd/test';
 import { GuideCommand } from './cmd/guide';
+import { ResetCommand } from './cmd/reset';
+import { ResetPasswordCommand } from './cmd/reset-password';
+import { ResendVerificationCommand } from './cmd/resend-verification';
 
 export const commands: Command[] = [
 	new ClearCommand(),
@@ -32,7 +35,10 @@ export const commands: Command[] = [
 	new APiCommand(),
 	new HookCommand(),
 	new TestCommand(),
-	new GuideCommand()
+	new GuideCommand(),
+	new ResetCommand(),
+	new ResetPasswordCommand(),
+	new ResendVerificationCommand()
 ];
 
 function parseArgs(commandEntire: string): string[] {
