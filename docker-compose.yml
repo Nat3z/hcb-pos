@@ -1,0 +1,39 @@
+services:
+  db:
+    image: postgres:13.22-alpine
+    restart: always
+    env_file:
+      - .env
+    networks:
+      - pos-network
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  adminer:
+    image: adminer
+    restart: always
+    ports:
+      - 8080:8080
+    depends_on:
+      - db
+    networks:
+      - pos-network
+
+  hcb-pos:
+    build: .
+    restart: always
+    ports:
+      - 5173:3000
+    depends_on:
+      - db
+    env_file:
+      - .env
+    networks:
+      - pos-network
+
+networks:
+  pos-network:
+    driver: bridge
+
+volumes:
+  pgdata:

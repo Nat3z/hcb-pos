@@ -1,0 +1,15 @@
+@import 'tailwindcss';
+@theme {
+	--font-analogue: 'Analogue', sans-serif;
+}
+
+@font-face {
+	font-family: 'Analogue';
+	src: url('/AnalogueOS-Regular.ttf') format('truetype');
+	font-weight: 400;
+	font-style: normal;
+}
+
+body {
+	@apply bg-black font-analogue text-white;
+}
