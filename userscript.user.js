@@ -294,6 +294,19 @@
 		}
 	}
 
+	// Remove existing overlay elements
+	function removeExistingOverlay() {
+		const existingTrigger = document.querySelector('[data-hcb-pos-trigger]');
+		const existingMenu = document.querySelector('[data-hcb-pos-menu]');
+
+		if (existingTrigger) {
+			existingTrigger.remove();
+		}
+		if (existingMenu) {
+			existingMenu.remove();
+		}
+	}
+
 	// Add hover menu to HCB interface
 	function addHoverMenu() {
 		// Wait for page to load
@@ -302,8 +315,12 @@
 			return;
 		}
 
+		// Remove any existing overlay elements first
+		removeExistingOverlay();
+
 		// Create hover trigger area
 		const hoverTrigger = document.createElement('div');
+		hoverTrigger.setAttribute('data-hcb-pos-trigger', 'true');
 		hoverTrigger.style.cssText = `
             position: fixed;
             bottom: 0;
@@ -316,6 +333,7 @@
 
 		// Create menu container
 		const menuContainer = document.createElement('div');
+		menuContainer.setAttribute('data-hcb-pos-menu', 'true');
 		menuContainer.style.cssText = `
             position: fixed;
             bottom: 20px;
@@ -429,9 +447,135 @@
 		document.body.appendChild(menuContainer);
 	}
 
+	// Authentication state monitoring
+	function setupAuthStateMonitoring() {
+		let currentSessionToken = getHCBSessionToken();
+		let wasLoggedIn = !!currentSessionToken;
+
+		// Check authentication state periodically
+		function checkAuthState() {
+			const newSessionToken = getHCBSessionToken();
+			const isLoggedIn = !!newSessionToken;
+
+			// Detect login event
+			if (!wasLoggedIn && isLoggedIn) {
+				console.log('User logged in, automatically linking token...');
+				showNotification('Logged in! Linking token to PoS...', false);
+				setTimeout(() => {
+					linkHCBToken()
+						.then(() => {
+							GM.setValue('lastLinkedTime', Date.now());
+						})
+						.catch((error) => {
+							console.error('Auto-link failed:', error);
+						});
+				}, 1000); // Wait a bit for the session to fully establish
+			}
+
+			// Detect logout event
+			if (wasLoggedIn && !isLoggedIn) {
+				console.log('User logged out');
+				showNotification('Logged out from HCB', true);
+			}
+
+			// Update state
+			currentSessionToken = newSessionToken;
+			wasLoggedIn = isLoggedIn;
+		}
+
+		// Check auth state every 5 seconds
+		setInterval(checkAuthState, 5000);
+
+		// Also check on page visibility change (when user switches back to tab)
+		document.addEventListener('visibilitychange', () => {
+			if (!document.hidden) {
+				checkAuthState();
+			}
+		});
+
+		// Monitor cookie changes for more immediate detection
+		let lastCookieValue = document.cookie;
+		const cookieObserver = new MutationObserver(() => {
+			if (document.cookie !== lastCookieValue) {
+				lastCookieValue = document.cookie;
+				// Check if it's a session token change
+				setTimeout(checkAuthState, 100);
+			}
+		});
+
+		// Start observing document changes that might indicate cookie updates
+		cookieObserver.observe(document, {
+			childList: true,
+			subtree: true,
+			attributes: true
+		});
+	}
+
+	// Page change detection
+	function setupPageChangeDetection() {
+		let currentUrl = window.location.href;
+
+		// Monitor URL changes (for SPAs that use pushState/replaceState)
+		const originalPushState = history.pushState;
+		const originalReplaceState = history.replaceState;
+
+		function onPageChange() {
+			const newUrl = window.location.href;
+			if (newUrl !== currentUrl) {
+				currentUrl = newUrl;
+				console.log('Page changed, reinjecting overlay...');
+				// Wait a bit for the new page to render
+				setTimeout(() => {
+					addHoverMenu();
+				}, 2000);
+			}
+		}
+
+		// Override history methods
+		history.pushState = function (...args) {
+			originalPushState.apply(history, args);
+			onPageChange();
+		};
+
+		history.replaceState = function (...args) {
+			originalReplaceState.apply(history, args);
+			onPageChange();
+		};
+
+		// Listen for popstate events (back/forward buttons)
+		window.addEventListener('popstate', onPageChange);
+
+		// Also monitor DOM changes as a fallback
+		let reinjectionTimeout;
+		const observer = new MutationObserver((mutations) => {
+			// Throttle reinjection to prevent excessive calls
+			if (reinjectionTimeout) return;
+
+			reinjectionTimeout = setTimeout(() => {
+				// Check if the overlay elements are still present
+				const triggerExists = document.querySelector('[data-hcb-pos-trigger]');
+				const menuExists = document.querySelector('[data-hcb-pos-menu]');
+
+				if (!triggerExists || !menuExists) {
+					console.log('Overlay elements missing, reinjecting...');
+					addHoverMenu();
+				}
+				reinjectionTimeout = null;
+			}, 1000);
+		});
+
+		// Start observing DOM changes
+		observer.observe(document.body, {
+			childList: true,
+			subtree: true
+		});
+	}
+
 	// Initialize the userscript
 	function init() {
 		addHoverMenu();
+		setupPageChangeDetection();
+		setupAuthStateMonitoring();
 
 		// Also add keyboard shortcut (Ctrl+Shift+L)
 		document.addEventListener('keydown', (e) => {
