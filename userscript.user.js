@@ -1,10 +1,10 @@
 /* eslint-disable @typescript-eslint/no-unused-vars */
 // ==UserScript==
 // @name         HCB PoS Token Linker
-// @namespace    http://tampermonkey.net/
+// @namespace    https://raw.githubusercontent.com/nat3z/hcb-pos/main/userscript.user.js
 // @version      1.0
 // @description  Extract HCB auth token and link it to PoS
-// @author       You
+// @author       nat3z
 // @match        https://hcb.hackclub.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue
