@@ -2,13 +2,13 @@
 // ==UserScript==
 // @name         HCB PoS Token Linker
 // @namespace    https://raw.githubusercontent.com/nat3z/hcb-pos/main/userscript.user.js
-// @version      1.0
+// @version      1.1
 // @description  Extract HCB auth token and link it to PoS
 // @author       nat3z
 // @match        https://hcb.hackclub.com/*
-// @grant        GM_getValue
-// @grant        GM_setValue
-// @grant        GM_xmlhttpRequest
+// @grant        GM.getValue
+// @grant        GM.setValue
+// @grant        GM.xmlHttpRequest
 // ==/UserScript==
 
 (function () {
@@ -67,83 +67,86 @@
                 width: 90%;
             `;
 
-			const currentPosUrl = GM_getValue(CONFIG_KEYS.POS_URL, '');
-			const currentApiToken = GM_getValue(CONFIG_KEYS.API_TOKEN, '');
+			Promise.all([
+				GM.getValue(CONFIG_KEYS.POS_URL, ''),
+				GM.getValue(CONFIG_KEYS.API_TOKEN, '')
+			]).then(([currentPosUrl, currentApiToken]) => {
+				modal.innerHTML = `
+									<h2 style="margin-top: 0; color: #333;">HCB PoS Configuration</h2>
+									<div style="margin-bottom: 20px;">
+											<label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">
+													PoS Instance URL:
+											</label>
+											<input type="text" id="posUrl" placeholder="https://your-pos-instance.com" 
+														value="${currentPosUrl}"
+														style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+											<small style="color: #666;">The URL of your HCB PoS instance</small>
+									</div>
+									<div style="margin-bottom: 20px;">
+											<label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">
+													API Token:
+											</label>
+											<input type="password" id="apiToken" placeholder="Your API token" 
+														value="${currentApiToken}"
+														style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
+											<small style="color: #666;">Your PoS API token</small>
+									</div>
+									<div style="display: flex; gap: 10px; justify-content: flex-end;">
+											<button id="cancelBtn" style="padding: 8px 16px; border: 1px solid #ddd; background: gray; color: black; border-radius: 4px; cursor: pointer;">
+													Cancel
+											</button>
+											<button id="saveBtn" style="padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">
+													Save & Link Token
+											</button>
+									</div>
+							`;
 
-			modal.innerHTML = `
-                <h2 style="margin-top: 0; color: #333;">HCB PoS Configuration</h2>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">
-                        PoS Instance URL:
-                    </label>
-                    <input type="text" id="posUrl" placeholder="https://your-pos-instance.com" 
-                           value="${currentPosUrl}"
-                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-                    <small style="color: #666;">The URL of your HCB PoS instance</small>
-                </div>
-                <div style="margin-bottom: 20px;">
-                    <label style="display: block; margin-bottom: 5px; font-weight: bold; color: #555;">
-                        API Token:
-                    </label>
-                    <input type="password" id="apiToken" placeholder="Your API token" 
-                           value="${currentApiToken}"
-                           style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box;">
-                    <small style="color: #666;">Your PoS API token</small>
-                </div>
-                <div style="display: flex; gap: 10px; justify-content: flex-end;">
-                    <button id="cancelBtn" style="padding: 8px 16px; border: 1px solid #ddd; background: gray; color: black; border-radius: 4px; cursor: pointer;">
-                        Cancel
-                    </button>
-                    <button id="saveBtn" style="padding: 8px 16px; border: none; background: #007bff; color: white; border-radius: 4px; cursor: pointer;">
-                        Save & Link Token
-                    </button>
-                </div>
-            `;
+				overlay.appendChild(modal);
+				document.body.appendChild(overlay);
 
-			overlay.appendChild(modal);
-			document.body.appendChild(overlay);
+				// Handle button clicks
+				document.getElementById('cancelBtn').onclick = () => {
+					document.body.removeChild(overlay);
+					resolve(null);
+				};
 
-			// Handle button clicks
-			document.getElementById('cancelBtn').onclick = () => {
-				document.body.removeChild(overlay);
-				resolve(null);
-			};
+				document.getElementById('saveBtn').onclick = () => {
+					const posUrl = document.getElementById('posUrl').value.trim();
+					const apiToken = document.getElementById('apiToken').value.trim();
 
-			document.getElementById('saveBtn').onclick = () => {
-				const posUrl = document.getElementById('posUrl').value.trim();
-				const apiToken = document.getElementById('apiToken').value.trim();
+					if (!posUrl || !apiToken) {
+						alert('Please fill in both fields');
+						return;
+					}
 
-				if (!posUrl || !apiToken) {
-					alert('Please fill in both fields');
-					return;
-				}
+					// Remove trailing slash from URL if present
+					const cleanUrl = posUrl.replace(/\/$/, '');
+					Promise.all([
+						GM.setValue(CONFIG_KEYS.POS_URL, cleanUrl),
+						GM.setValue(CONFIG_KEYS.API_TOKEN, apiToken)
+					]);
 
-				// Remove trailing slash from URL if present
-				const cleanUrl = posUrl.replace(/\/$/, '');
+					document.body.removeChild(overlay);
+					resolve({ posUrl: cleanUrl, apiToken });
+				};
 
-				GM_setValue(CONFIG_KEYS.POS_URL, cleanUrl);
-				GM_setValue(CONFIG_KEYS.API_TOKEN, apiToken);
+				// Handle Enter key
+				modal.addEventListener('keypress', (e) => {
+					if (e.key === 'Enter') {
+						document.getElementById('saveBtn').click();
+					}
+				});
 
-				document.body.removeChild(overlay);
-				resolve({ posUrl: cleanUrl, apiToken });
-			};
-
-			// Handle Enter key
-			modal.addEventListener('keypress', (e) => {
-				if (e.key === 'Enter') {
-					document.getElementById('saveBtn').click();
-				}
+				// Focus first input
+				document.getElementById('posUrl').focus();
 			});
-
-			// Focus first input
-			document.getElementById('posUrl').focus();
 		});
 	}
 
 	// Send token to PoS API
 	function linkToken(sessionToken, posUrl, apiToken) {
 		return new Promise((resolve, reject) => {
-			GM_xmlhttpRequest({
+			GM.xmlHttpRequest({
 				method: 'POST',
 				url: `${posUrl}/api/link`,
 				headers: {
@@ -208,7 +211,7 @@
 				return;
 			}
 
-			GM_xmlhttpRequest({
+			GM.xmlHttpRequest({
 				method: 'GET',
 				url: `${posUrl}/api/link`,
 				headers: {
@@ -251,18 +254,13 @@
 			);
 
 			// Check if configuration exists
-			let posUrl = GM_getValue(CONFIG_KEYS.POS_URL, '');
-			let apiToken = GM_getValue(CONFIG_KEYS.API_TOKEN, '');
+			let posUrl = await GM.getValue(CONFIG_KEYS.POS_URL, '');
+			let apiToken = await GM.getValue(CONFIG_KEYS.API_TOKEN, '');
 
 			// Show config modal if settings are missing
 			if (!posUrl || !apiToken) {
-				const config = await showConfigModal();
-				if (!config) {
-					showNotification('Configuration cancelled', true);
-					return;
-				}
-				posUrl = config.posUrl;
-				apiToken = config.apiToken;
+				console.error('No configuration found for HCB PoS');
+				return;
 			}
 
 			// Check if organization is already linked
@@ -444,27 +442,32 @@
 		});
 
 		// check if the point of sale can be linked
-		const posUrl = GM_getValue(CONFIG_KEYS.POS_URL, '');
-		const apiToken = GM_getValue(CONFIG_KEYS.API_TOKEN, '');
-		checkOrganizationLinked(posUrl, apiToken).then((canAuthorize) => {
-			if (!canAuthorize) {
-				showNotification('No organization linked. Please confirm your configuration.', true);
-				showConfigModal().then((config) => {
-					if (config) {
-						showNotification('Configuration updated!', false);
-					}
+		Promise.all([
+			GM.getValue(CONFIG_KEYS.POS_URL, ''),
+			GM.getValue(CONFIG_KEYS.API_TOKEN, ''),
+			GM.getValue('lastLinkedTime', 0)
+		]).then(([posUrl, apiToken, lastLinkedTime]) => {
+			checkOrganizationLinked(posUrl, apiToken).then((canAuthorize) => {
+				if (!canAuthorize) {
+					showNotification('No organization linked.', true);
+					showConfigModal().then((config) => {
+						if (config) {
+							showNotification('Configuration updated!', false);
+							linkHCBToken().then(() => {
+								GM.setValue('lastLinkedTime', Date.now());
+							});
+						}
+					});
+				}
+			});
+			// check if it's been > 30 minutes, and if so, automatically link the token
+			const timeDiff = Date.now() - lastLinkedTime;
+			if (timeDiff > 30 * 60 * 1000) {
+				linkHCBToken().then(() => {
+					GM.setValue('lastLinkedTime', Date.now());
 				});
 			}
 		});
-
-		// check if it's been > 30 minutes, and if so, automatically link the token
-		const lastLinkedTime = GM_getValue('lastLinkedTime', 0);
-		const currentTime = Date.now();
-		const timeDiff = currentTime - lastLinkedTime;
-		if (timeDiff > 30 * 60 * 1000) {
-			linkHCBToken();
-			GM_setValue('lastLinkedTime', currentTime);
-		}
 	}
 
 	// Start the script
