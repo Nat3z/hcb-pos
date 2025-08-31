@@ -50,11 +50,10 @@ export const DELETE: RequestHandler = async ({ request }) => {
 	// check if the product exists
 	const hooks = await db.select().from(orderHook).where(eq(orderHook.productId, productId));
 	if (hooks.length === 0) {
-		return new Response('Hook not found', { status: 404 });
+		return new Response('Some hooks not found', { status: 404 });
 	}
-	const hook = hooks[0];
 	// check if the hook is associated with the user
-	const products = await db.select().from(product).where(eq(product.id, hook.productId));
+	const products = await db.select().from(product).where(eq(product.id, productId));
 	if (products.length === 0) {
 		return new Response('Product not found', { status: 404 });
 	}

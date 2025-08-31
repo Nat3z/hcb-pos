@@ -1,7 +1,7 @@
 import z from 'zod';
 import type { RequestHandler } from './$types';
 import { orderHook, order as orderTable } from '$lib/server/db/schema';
-import { eq, and } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 import { db } from '$lib/server/db';
 import { auth } from '$lib/server/auth';
 
@@ -29,22 +29,30 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	// then send it through the webhook
 	// find the associated hook for the order
-	const hooks = await db.select().from(orderHook).where(eq(orderHook.productId, order.productId));
+	const unqiueProductIds = Array.from(new Set(order.productIds));
+	const hooks = await db
+		.select()
+		.from(orderHook)
+		.where(inArray(orderHook.productId, unqiueProductIds));
 
-	if (!hooks || hooks.length === 0) {
-		console.error(`No hook found for product ${order.productId}`);
+	if (!hooks || hooks.length !== unqiueProductIds.length) {
+		console.error(`No hook found for product ${unqiueProductIds}`);
 		return new Response('No hook found', { status: 404 });
 	}
 
+	const uniqueHooks = hooks.filter(
+		(hook, index, self) => index === self.findIndex((t) => t.hookUrl === hook.hookUrl)
+	);
+
 	const hookResponses: { hookUrl: string; response: Response }[] = [];
 
-	for (const hook of hooks) {
+	for (const hook of uniqueHooks) {
 		try {
 			// send a POST request to the hook with the order id
 			console.log(`Sending hook request to ${hook.hookUrl}`);
 			const response = await fetch(hook.hookUrl, {
 				method: 'POST',
-				body: JSON.stringify({ orderId: order.id, productId: order.productId }),
+				body: JSON.stringify({ orderId: order.id, productIds: order.productIds }),
 				headers: {
 					'Content-Type': 'application/json',
 					'X-Hook-Secret': hook.hookSecret

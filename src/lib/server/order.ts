@@ -1,9 +1,9 @@
 import { db } from './db';
 import { order, product } from './db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 export interface CreateOrderParams {
-	productId: string;
+	productIds: string[];
 	userId: string;
 }
 
@@ -14,20 +14,23 @@ export interface CreateOrderResult {
 }
 
 export async function createOrder({
-	productId,
+	productIds,
 	userId
 }: CreateOrderParams): Promise<CreateOrderResult> {
 	try {
+		// Remove duplicate productIds for existence check
+		const uniqueProductIds = Array.from(new Set(productIds));
+
 		// Verify that the product exists and belongs to the user
 		const productExists = await db
 			.select()
 			.from(product)
-			.where(and(eq(product.id, productId), eq(product.owner, userId)));
+			.where(and(inArray(product.id, uniqueProductIds), eq(product.owner, userId)));
 
-		if (productExists.length === 0) {
+		if (productExists.length !== uniqueProductIds.length) {
 			return {
 				success: false,
-				error: 'Product not found'
+				error: 'Some products not found'
 			};
 		}
 
@@ -37,7 +40,7 @@ export async function createOrder({
 			.values({
 				id: crypto.randomUUID(),
 				userId,
-				productId,
+				productIds,
 				fulfilled: false
 			})
 			.returning();
@@ -47,6 +50,7 @@ export async function createOrder({
 			order: newOrder[0]
 		};
 	} catch (error) {
+		console.error(error);
 		return {
 			success: false,
 			error: error instanceof Error ? error.message : 'Unknown error occurred'

@@ -3,36 +3,59 @@ import {
 	hcbOrganization as hcbOrganizationTable,
 	order as orderTable,
 	product as productTable,
-	user as userTable
+	user
 } from '$lib/server/db/schema';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ params }) => {
 	const orderId = params.order;
 
-	const allOrders = await db
+	// Fetch the order and all associated products
+	const orderRows = await db
 		.select({
 			orderId: orderTable.id,
-			productName: productTable.name,
-			productDescription: productTable.description,
 			hcbOrganizationId: hcbOrganizationTable.id,
-			productPrice: productTable.price
+			productId: productTable.id,
+			productPrice: productTable.price,
+			productIds: orderTable.productIds
 		})
 		.from(orderTable)
-		.innerJoin(productTable, eq(orderTable.productId, productTable.id))
-		.innerJoin(userTable, eq(orderTable.userId, userTable.id))
-		.innerJoin(hcbOrganizationTable, eq(userTable.id, hcbOrganizationTable.userId))
-		.where(eq(orderTable.id, orderId))
-		.limit(1);
-	if (allOrders.length === 0) {
+		.innerJoin(productTable, sql`${productTable.id} = ANY(${orderTable.productIds})`)
+		.innerJoin(user, eq(user.id, orderTable.userId))
+		.innerJoin(hcbOrganizationTable, eq(hcbOrganizationTable.userId, user.id))
+		.where(eq(orderTable.id, orderId));
+
+	if (orderRows.length === 0) {
 		return new Response('Order not found', { status: 404 });
 	}
 
-	const order = allOrders[0];
+	// Ensure all productIds in the order have a matching product
+	const orderProductIds = orderRows[0].productIds as string[];
+	const foundProductIds = orderRows.map((row) => row.productId);
+	const missingProductIds = orderProductIds.filter((pid) => !foundProductIds.includes(pid));
+	if (missingProductIds.length > 0) {
+		return new Response('Some products in the order do not exist: ' + missingProductIds.join(','), {
+			status: 400
+		});
+	}
+
+	// Count occurrences of each productId in the order
+	const productIdCounts: Record<string, number> = {};
+	for (const pid of orderProductIds) {
+		productIdCounts[pid] = (productIdCounts[pid] || 0) + 1;
+	}
+
+	// Calculate total price, multiplying each product's price by its count in the order
+	const totalPrice = orderRows.reduce((sum, row) => {
+		const count = productIdCounts[row.productId] || 0;
+		return sum + (row.productPrice ?? 0) * count;
+	}, 0);
+
+	const order = orderRows[0];
 
 	let url = 'https://hcb.hackclub.com/donations/start/' + order.hcbOrganizationId + '?';
-	url += 'amount=' + order.productPrice;
+	url += 'amount=' + parseInt(String(totalPrice));
 	url +=
 		'&message=' +
 		encodeURIComponent(

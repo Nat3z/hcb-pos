@@ -77,9 +77,7 @@ export const order = pgTable('order', {
 	userId: text('user_id')
 		.notNull()
 		.references(() => user.id, { onDelete: 'cascade' }),
-	productId: text('product_id')
-		.notNull()
-		.references(() => product.id, { onDelete: 'cascade' }),
+	productIds: text('product_ids').array().notNull(),
 	fulfilled: boolean('fulfilled')
 		.$defaultFn(() => false)
 		.notNull()

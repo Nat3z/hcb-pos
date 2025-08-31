@@ -5,7 +5,7 @@ import {
 	product as productTable,
 	orderHook
 } from '../lib/server/db/schema.js';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import HCB from 'innerhcb';
 import { env } from 'bun';
 
@@ -63,25 +63,81 @@ class OrderFulfillmentChecker {
 		try {
 			console.log(`[${new Date().toISOString()}] Checking for unfulfilled orders...`);
 
-			// Get all unfulfilled orders with their associated HCB organization info and product price
-			const unfulfilled = await db
-				.select({
-					orderId: orderTable.id,
-					userId: orderTable.userId,
-					productId: orderTable.productId,
-					hcbOrgId: hcbOrganizationTable.id,
-					sessionToken: hcbOrganizationTable.sessionToken,
-					productPrice: productTable.price
-				})
+			// Get all unfulfilled orders with their associated HCB organization info
+			const unfulfilledOrders = await db
+				.select()
 				.from(orderTable)
 				.innerJoin(hcbOrganizationTable, eq(orderTable.userId, hcbOrganizationTable.userId))
-				.innerJoin(productTable, eq(orderTable.productId, productTable.id))
 				.where(eq(orderTable.fulfilled, false));
 
-			if (unfulfilled.length === 0) {
+			if (unfulfilledOrders.length === 0) {
 				console.log('No unfulfilled orders found');
 				return;
 			}
+
+			const unfulfilledRaw: Array<{
+				orderId: string;
+				userId: string;
+				productIds: string[];
+				hcbOrgId: string;
+				sessionToken: string;
+				productPrice: number;
+			}> = [];
+
+			for (const row of unfulfilledOrders) {
+				const order = row.order;
+				const hcbOrg = row.hcb_organization;
+				const productIds: string[] = order.productIds;
+
+				// Fetch all products for this order
+				const products = await db
+					.select()
+					.from(productTable)
+					.where(inArray(productTable.id, productIds));
+
+				// Ensure all productIds have a match
+				const foundProductIds = products.map((p) => p.id);
+				const missingProductIds = productIds.filter((pid) => !foundProductIds.includes(pid));
+				if (missingProductIds.length > 0) {
+					console.log(
+						`Order ${order.id} skipped: not all productIds have a matching product. Missing: ${missingProductIds.join(',')}`
+					);
+					continue;
+				}
+
+				// Count occurrences of each productId in the order
+				const productIdCounts: Record<string, number> = {};
+				for (const pid of productIds) {
+					productIdCounts[pid] = (productIdCounts[pid] || 0) + 1;
+				}
+
+				// Calculate total price, multiplying each product's price by its count in the order
+				const productPrice = products.reduce((sum, p) => {
+					const count = productIdCounts[p.id] || 0;
+					return sum + (p.price ?? 0) * count;
+				}, 0);
+
+				unfulfilledRaw.push({
+					orderId: order.id,
+					userId: order.userId,
+					productIds,
+					hcbOrgId: hcbOrg.id,
+					sessionToken: hcbOrg.sessionToken,
+					productPrice
+				});
+			}
+
+			if (unfulfilledRaw.length === 0) {
+				console.log('No unfulfilled orders found');
+				return;
+			}
+
+			const unfulfilled = unfulfilledRaw
+				.map((order) => ({
+					...order,
+					productPrice: Number(order.productPrice)
+				}))
+				.filter((order) => !isNaN(order.productPrice));
 
 			console.log(`Found ${unfulfilled.length} unfulfilled orders`);
 
@@ -116,7 +172,7 @@ class OrderFulfillmentChecker {
 		orders: Array<{
 			orderId: string;
 			userId: string;
-			productId: string;
+			productIds: string[];
 			hcbOrgId: string;
 			sessionToken: string;
 			productPrice: number;
@@ -155,7 +211,7 @@ class OrderFulfillmentChecker {
 		order: {
 			orderId: string;
 			userId: string;
-			productId: string;
+			productIds: string[];
 			hcbOrgId: string;
 			sessionToken: string;
 			productPrice: number;
@@ -169,13 +225,12 @@ class OrderFulfillmentChecker {
 		hcb: HCB
 	) {
 		try {
-			console.log(
-				`Checking order ${order.orderId} (amount: $${(order.productPrice / 100).toFixed(2)}) against cached donations...`
-			);
-
 			const amountTolerance = order.productPrice * 0.1; // 10% tolerance
 			const minAmount = order.productPrice;
 			const maxAmount = order.productPrice + amountTolerance;
+			console.log(
+				`Checking order ${order.orderId} (amount: $${(order.productPrice / 100).toFixed(2)}+${(maxAmount / 100).toFixed(2)} against cached donations...`
+			);
 
 			let checkedDonations = 0;
 			let skippedDonations = 0;
@@ -201,7 +256,7 @@ class OrderFulfillmentChecker {
 							await this.fulfillOrder({
 								id: order.orderId,
 								userId: order.userId,
-								productId: order.productId,
+								productIds: order.productIds,
 								fulfilled: true
 							});
 							return;
@@ -237,11 +292,7 @@ class OrderFulfillmentChecker {
 		// Look for the order ID pattern in the message (ORDER-ID|{orderId}|)
 		const orderPattern = `ORDER-ID|${orderId}|`;
 
-		return (
-			message.includes(orderPattern) ||
-			memo.includes(orderPattern) ||
-			message.includes('Test Payment')
-		);
+		return message.includes(orderPattern) || memo.includes(orderPattern);
 	}
 
 	private async fulfillOrder(order: typeof orderTable.$inferSelect) {
@@ -249,21 +300,27 @@ class OrderFulfillmentChecker {
 			await db.update(orderTable).set({ fulfilled: true }).where(eq(orderTable.id, order.id));
 
 			// find the associated hook for the order
+			const unqiueProductIds = Array.from(new Set(order.productIds));
 			const hooks = await db
 				.select()
 				.from(orderHook)
-				.where(eq(orderHook.productId, order.productId));
+				.where(inArray(orderHook.productId, unqiueProductIds));
 
-			if (!hooks || hooks.length === 0) {
-				console.error(`No hook found for product ${order.productId}`);
+			if (hooks.length !== unqiueProductIds.length) {
+				console.error(`No hook found for product ${order.productIds}`);
 				return;
 			}
 
-			for (const hook of hooks) {
+			// remove any duplicate hooks
+			const uniqueHooks = hooks.filter(
+				(hook, index, self) => index === self.findIndex((t) => t.hookUrl === hook.hookUrl)
+			);
+
+			for (const hook of uniqueHooks) {
 				// send a POST request to the hook with the order id
 				const response = await fetch(hook.hookUrl, {
 					method: 'POST',
-					body: JSON.stringify({ orderId: order.id, productId: order.productId }),
+					body: JSON.stringify({ orderId: order.id, productIds: order.productIds }),
 					headers: {
 						'Content-Type': 'application/json',
 						'X-Hook-Secret': hook.hookSecret

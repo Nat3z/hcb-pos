@@ -13,15 +13,15 @@ export class SellCommand extends Command {
 			return;
 		}
 
-		const productId = args[0];
-		if (!productId) {
-			add('Product ID is required');
+		const productIds = args;
+		if (!productIds || productIds.length === 0) {
+			add('Product IDs are required');
 			return;
 		}
 
 		const response = await fetch('/d/orders', {
 			method: 'POST',
-			body: JSON.stringify({ productId })
+			body: JSON.stringify({ productIds })
 		});
 
 		if (!response.ok) {
