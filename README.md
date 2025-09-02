@@ -61,10 +61,9 @@ You can then redirect uesrs to `https://<HCB_POS_INSTANCE>/checkout/<orderId>` t
 To get an order's status, you can use the `GET /api/orders` endpoint.
 
 ```bash
-curl -X GET http://localhost:3000/api/orders \
+curl -X GET http://localhost:3000/api/orders?orderId=<ORDER_ID> \
   -H "Authorization: Bearer <API_KEY>" \
-  -H "Content-Type: application/json" \
-  -d '{"orderId": "<ORDER_ID>"}'
+  -H "Content-Type: application/json"
 ```
 
 ### Products

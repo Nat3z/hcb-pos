@@ -23,7 +23,7 @@ services:
 
   hcb-pos:
     build: .
-    restart: always
+    restart: unless-stopped
     ports:
       - 5173:3000
     depends_on:

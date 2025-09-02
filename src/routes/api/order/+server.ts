@@ -7,17 +7,17 @@ import { and, eq } from 'drizzle-orm';
 import { order as orderTable } from '$lib/server/db/schema';
 
 const schema = z.object({
-	productId: z.string()
+	productIds: z.array(z.string())
 });
 export const POST: RequestHandler = async ({ request }) => {
 	const json = await request.json();
-	const { productId } = schema.parse(json);
+	const { productIds } = schema.parse(json);
 	const userId = await api.headers(request);
 	if (!userId) {
 		return new Response('Unauthorized', { status: 401 });
 	}
 	const result = await createOrder({
-		productId,
+		productIds,
 		userId
 	});
 
@@ -27,12 +27,11 @@ export const POST: RequestHandler = async ({ request }) => {
 	return new Response(JSON.stringify(result.order));
 };
 
-const orderSchema = z.object({
-	orderId: z.string()
-});
-export const GET: RequestHandler = async ({ request }) => {
-	const json = await request.json();
-	const { orderId } = orderSchema.parse(json);
+export const GET: RequestHandler = async ({ url, request }) => {
+	const orderId = url.searchParams.get('orderId');
+	if (!orderId) {
+		return new Response('Missing orderId', { status: 400 });
+	}
 	const userId = await api.headers(request);
 	if (!userId) {
 		return new Response('Unauthorized', { status: 401 });
