@@ -8,8 +8,10 @@ import {
 import { eq, sql } from 'drizzle-orm';
 import type { RequestHandler } from './$types';
 
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, url: rawUrl }) => {
 	const orderId = params.order;
+	// get the query param "returnTo"
+	const returnTo = rawUrl.searchParams.get('returnTo') ?? '';
 
 	// Fetch the order and all associated products
 	const orderRows = await db
@@ -65,5 +67,13 @@ export const GET: RequestHandler = async ({ params }) => {
 		);
 	url += '&goods=true';
 
-	return new Response(url, { status: 302, headers: { Location: url } });
+	const response = new Response(url, { status: 302, headers: { Location: url } });
+	if (returnTo) {
+		response.headers.append(
+			'Set-Cookie',
+			`returnTo=${orderId}|${encodeURIComponent(returnTo)}; Path=/; HttpOnly; SameSite=Lax`
+		);
+	}
+
+	return response;
 };
